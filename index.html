@@ -99,7 +99,7 @@
 
       Promise.all(promises).then(results => {
         mergedCSV = results.join('\n');
-        output.textContent = mergedCSV.slice(0, 3000) + (mergedCSV.length > 3000 ? "\n...（省略）" : "");
+        output.textContent = (mergedCSV.slice(0, 3000) + (mergedCSV.length > 3000 ? "\n...（省略）" : "")).replaceAll(",", "	");
         copyBtn.disabled = false;
       }).catch(err => {
         alert("読み込みエラー: " + err);
