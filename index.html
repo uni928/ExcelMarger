@@ -28,6 +28,11 @@
 <body>
   <h1>CSV / XLTMファイルを結合してコピー</h1>
   <div id="dropzone">ここにCSVやXLTMファイルをドロップ、または選択</div>
+  <label>
+    <input type="checkbox" id="skipHeader">
+    2個目以降のファイルの1行目（ヘッダー）を除く
+  </label>
+  <br><br>
   <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.xltm" multiple>
   <br><br>
   <button id="copyBtn" disabled>📋 すべてコピーする</button>
@@ -40,7 +45,9 @@
     const fileInput = document.getElementById('fileInput');
     const output = document.getElementById('output');
     const copyBtn = document.getElementById('copyBtn');
+    const skipHeader = document.getElementById('skipHeader');
     let mergedCSV = "";
+    let lastFiles = null;  // 最後に読み込んだファイルを保存
 
     dropzone.addEventListener('dragover', e => {
       e.preventDefault();
@@ -54,11 +61,17 @@
     dropzone.addEventListener('drop', e => {
       e.preventDefault();
       dropzone.style.background = '';
+      lastFiles = e.dataTransfer.files;
       handleFiles(e.dataTransfer.files);
     });
 
     fileInput.addEventListener('change', () => {
+      lastFiles = fileInput.files;
       handleFiles(fileInput.files);
+    });
+
+    skipHeader.addEventListener('change', () => {
+      if (lastFiles) handleFiles(lastFiles);  // 再マージ実行
     });
 
     function handleFiles(files) {
@@ -71,13 +84,21 @@
         return;
       }
 
-      let promises = validFiles.map(file => {
+      const skipFirst = skipHeader.checked;
+
+      let promises = validFiles.map((file, index) => {
         const ext = file.name.split('.').pop().toLowerCase();
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
 
           if (ext === 'csv') {
-            reader.onload = () => resolve(reader.result);
+            reader.onload = () => {
+              let text = reader.result.replaceAll(",", "\t");
+              if (skipFirst && index > 0) {
+                text = text.split('\n').slice(1).join('\n');
+              }
+              resolve(text);
+            };
             reader.readAsText(file);
           } else {
             reader.onload = () => {
@@ -86,7 +107,10 @@
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-                const csv = XLSX.utils.sheet_to_csv(worksheet);
+                let csv = XLSX.utils.sheet_to_csv(worksheet);
+                if (skipFirst && index > 0) {
+                  csv = csv.split('\n').slice(1).join('\n');
+                }
                 resolve(csv);
               } catch (err) {
                 reject(`読み込み失敗: ${file.name}`);
