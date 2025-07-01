@@ -107,7 +107,7 @@
     }
 
     copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(mergedCSV)
+      navigator.clipboard.writeText(mergedCSV.replaceAll(",", "	"))
         .then(() => alert("クリップボードにコピーしました！"))
         .catch(err => alert("コピーに失敗しました: " + err));
     });
