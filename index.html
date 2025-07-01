@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>CSV / XLTM ファイル結合コピー</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #dropzone {
+      border: 2px dashed #888;
+      padding: 30px;
+      text-align: center;
+      color: #555;
+      margin-bottom: 20px;
+    }
+    #copyBtn {
+      padding: 10px 20px;
+      font-size: 1em;
+    }
+    pre {
+      max-height: 200px;
+      overflow: auto;
+      background: #f8f8f8;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>CSV / XLTMファイルを結合してコピー</h1>
+  <div id="dropzone">ここにCSVやXLTMファイルをドロップ、または選択</div>
+  <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.xltm" multiple>
+  <br><br>
+  <button id="copyBtn" disabled>📋 すべてコピーする</button>
+
+  <h3>結合内容（CSVプレビュー）</h3>
+  <pre id="output">ファイルを読み込んでください…</pre>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const output = document.getElementById('output');
+    const copyBtn = document.getElementById('copyBtn');
+    let mergedCSV = "";
+
+    dropzone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropzone.style.background = '#eef';
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.style.background = '';
+    });
+
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.style.background = '';
+      handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', () => {
+      handleFiles(fileInput.files);
+    });
+
+    function handleFiles(files) {
+      const validFiles = Array.from(files).filter(f =>
+        /\.(csv|xls|xlsx|xltm)$/i.test(f.name)
+      );
+
+      if (validFiles.length === 0) {
+        alert('対応ファイル（.csv, .xls, .xlsx, .xltm）を選択してください。');
+        return;
+      }
+
+      let promises = validFiles.map(file => {
+        const ext = file.name.split('.').pop().toLowerCase();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+
+          if (ext === 'csv') {
+            reader.onload = () => resolve(reader.result);
+            reader.readAsText(file);
+          } else {
+            reader.onload = () => {
+              try {
+                const data = new Uint8Array(reader.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const csv = XLSX.utils.sheet_to_csv(worksheet);
+                resolve(csv);
+              } catch (err) {
+                reject(`読み込み失敗: ${file.name}`);
+              }
+            };
+            reader.readAsArrayBuffer(file);
+          }
+        });
+      });
+
+      Promise.all(promises).then(results => {
+        mergedCSV = results.join('\n');
+        output.textContent = mergedCSV.slice(0, 3000) + (mergedCSV.length > 3000 ? "\n...（省略）" : "");
+        copyBtn.disabled = false;
+      }).catch(err => {
+        alert("読み込みエラー: " + err);
+      });
+    }
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(mergedCSV)
+        .then(() => alert("クリップボードにコピーしました！"))
+        .catch(err => alert("コピーに失敗しました: " + err));
+    });
+  </script>
+</body>
+</html>
