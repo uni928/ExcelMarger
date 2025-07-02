@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Merge and Copy CSV / XLTM Files</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #dropzone {
+      border: 2px dashed #888;
+      padding: 30px;
+      text-align: center;
+      color: #555;
+      margin-bottom: 20px;
+    }
+    #copyBtn {
+      padding: 10px 20px;
+      font-size: 1em;
+    }
+    pre {
+      max-height: 200px;
+      overflow: auto;
+      background: #f8f8f8;
+      padding: 10px;
+    }
+    label {
+      display: inline-block;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Merge and Copy CSV / XLTM Files</h1>
+  <div id="dropzone">Drop all your CSV or XLTM files here, or select them manually</div>
+  <label>
+    <input type="checkbox" id="skipHeader">
+    Skip the first row (header) from the second file onward
+  </label>
+  <br><br>
+  <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.xltm" multiple>
+  <br><br>
+  <button id="copyBtn" disabled>📋 Copy All</button>
+
+  <h3>Merged Content (CSV Preview)</h3>
+  <pre id="output">Please load your files...</pre>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const output = document.getElementById('output');
+    const copyBtn = document.getElementById('copyBtn');
+    const skipHeader = document.getElementById('skipHeader');
+    let mergedCSV = "";
+    let lastFiles = null;
+
+    dropzone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropzone.style.background = '#eef';
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.style.background = '';
+    });
+
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.style.background = '';
+      lastFiles = e.dataTransfer.files;
+      handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', () => {
+      lastFiles = fileInput.files;
+      handleFiles(fileInput.files);
+    });
+
+    skipHeader.addEventListener('change', () => {
+      if (lastFiles) handleFiles(lastFiles);
+    });
+
+    function handleFiles(files) {
+      const validFiles = Array.from(files).filter(f =>
+        /\.(csv|xls|xlsx|xltm)$/i.test(f.name)
+      );
+
+      if (validFiles.length === 0) {
+        alert('Please select supported files: .csv, .xls, .xlsx, .xltm');
+        return;
+      }
+
+      const skipFirst = skipHeader.checked;
+
+      let promises = validFiles.map((file, index) => {
+        const ext = file.name.split('.').pop().toLowerCase();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+
+          if (ext === 'csv') {
+            reader.onload = () => {
+              let text = reader.result.replaceAll(",", "\t");
+              if (skipFirst && index > 0) {
+                text = text.split('\n').slice(1).join('\n');
+              }
+              resolve(text);
+            };
+            reader.readAsText(file);
+          } else {
+            reader.onload = () => {
+              try {
+                const data = new Uint8Array(reader.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                let csv = XLSX.utils.sheet_to_csv(worksheet);
+                if (skipFirst && index > 0) {
+                  csv = csv.split('\n').slice(1).join('\n');
+                }
+                resolve(csv.replaceAll(",", "\t"));
+              } catch (err) {
+                reject(`Failed to load: ${file.name}`);
+              }
+            };
+            reader.readAsArrayBuffer(file);
+          }
+        });
+      });
+
+      Promise.all(promises).then(results => {
+        mergedCSV = results.join('\n');
+        output.textContent = (mergedCSV.slice(0, 3000) + (mergedCSV.length > 3000 ? "\n... (truncated)" : ""));
+        copyBtn.disabled = false;
+      }).catch(err => {
+        alert("Error while loading files: " + err);
+      });
+    }
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(mergedCSV)
+        .then(() => alert("Copied to clipboard!"))
+        .catch(err => alert("Failed to copy: " + err));
+    });
+  </script>
+</body>
+</html>
