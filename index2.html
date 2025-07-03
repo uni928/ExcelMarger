@@ -31,7 +31,7 @@
 </head>
 <body>
   <h1>Merge and Copy CSV / XLTM Files</h1>
-  <div id="dropzone">Drop all your CSV or XLTM files here at once, or select them manually(Dropping them one by one is not allowed)</div>
+  <div id="dropzone">Drop CSV or XLTM files here one by one or all at once</div>
   <label>
     <input type="checkbox" id="skipHeader">
     Skip the first row (header) from the second file onward
@@ -56,8 +56,9 @@
     const skipHeader = document.getElementById('skipHeader');
     const sortByFirstCol = document.getElementById('sortByFirstCol');
 
-    let mergedCSV = "";
-    let lastFiles = null;  // Save the last loaded files
+    let allFiles = [];         // All added File objects
+    let fileNamesSet = new Set(); // Track unique file names
+    let mergedTSV = "";
 
     dropzone.addEventListener('dragover', e => {
       e.preventDefault();
@@ -71,37 +72,46 @@
     dropzone.addEventListener('drop', e => {
       e.preventDefault();
       dropzone.style.background = '';
-      lastFiles = e.dataTransfer.files;
-      handleFiles(e.dataTransfer.files);
+      addFiles(e.dataTransfer.files);
     });
 
     fileInput.addEventListener('change', () => {
-      lastFiles = fileInput.files;
-      handleFiles(fileInput.files);
+      addFiles(fileInput.files);
     });
 
     skipHeader.addEventListener('change', () => {
-      if (lastFiles) handleFiles(lastFiles);  // Re-merge when toggled
+      remergeAll();
     });
 
     sortByFirstCol.addEventListener('change', () => {
-      if (lastFiles) handleFiles(lastFiles);
+      remergeAll();
     });
 
-    function handleFiles(files) {
-      const validFiles = Array.from(files).filter(f =>
+    function addFiles(newFiles) {
+      const validFiles = Array.from(newFiles).filter(f =>
         /\.(csv|xls|xlsx|xltm)$/i.test(f.name)
       );
 
-      if (validFiles.length === 0) {
-        alert('Please select supported files: .csv, .xls, .xlsx, .xltm');
+      const uniqueNewFiles = validFiles.filter(f => !fileNamesSet.has(f.name));
+      uniqueNewFiles.forEach(f => fileNamesSet.add(f.name));
+
+      if (uniqueNewFiles.length === 0) {
+        alert('No new files added (duplicates were ignored).');
         return;
       }
+
+      allFiles.push(...uniqueNewFiles);
+      //alert(`${uniqueNewFiles.length} new file(s) added.`);
+      remergeAll();
+    }
+
+    function remergeAll() {
+      if (allFiles.length === 0) return;
 
       const skipFirst = skipHeader.checked;
       const sortNeeded = sortByFirstCol.checked;
 
-      let promises = validFiles.map((file, index) => {
+      let promises = allFiles.map((file, index) => {
         const ext = file.name.split('.').pop().toLowerCase();
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -149,8 +159,8 @@
           });
         }
 
-        mergedCSV = [header, ...dataRows].join('\n');
-        output.textContent = mergedCSV.slice(0, 3000) + (mergedCSV.length > 3000 ? "\n... (truncated)" : "");
+        mergedTSV = [header, ...dataRows].join('\n');
+        output.textContent = mergedTSV.slice(0, 3000) + (mergedTSV.length > 3000 ? "\n... (truncated)" : "");
         copyBtn.disabled = false;
       }).catch(err => {
         alert("Error while loading files: " + err);
@@ -158,7 +168,7 @@
     }
 
     copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(mergedCSV)
+      navigator.clipboard.writeText(mergedTSV)
         .then(() => alert("Copied to clipboard!"))
         .catch(err => alert("Failed to copy: " + err));
     });
