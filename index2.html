@@ -25,23 +25,27 @@
     }
     label {
       display: inline-block;
-      margin: 10px 0;
+      margin: 5px 0;
     }
   </style>
 </head>
 <body>
   <h1>Merge and Copy CSV / XLTM Files</h1>
-  <div id="dropzone">Drop all your CSV or XLTM files here, or select them manually</div>
+  <div id="dropzone">Drop all your CSV or XLTM files here at once, or select them manually</div>
   <label>
     <input type="checkbox" id="skipHeader">
     Skip the first row (header) from the second file onward
+  </label>
+  <label>
+    <input type="checkbox" id="sortByFirstCol">
+    Sort by the first column in ascending order (excluding header)
   </label>
   <br><br>
   <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.xltm" multiple>
   <br><br>
   <button id="copyBtn" disabled>📋 Copy All</button>
 
-  <h3>Merged Content (CSV Preview)</h3>
+  <h3>Merged Content (Preview)</h3>
   <pre id="output">Please load your files...</pre>
 
   <script>
@@ -50,8 +54,10 @@
     const output = document.getElementById('output');
     const copyBtn = document.getElementById('copyBtn');
     const skipHeader = document.getElementById('skipHeader');
+    const sortByFirstCol = document.getElementById('sortByFirstCol');
+
     let mergedCSV = "";
-    let lastFiles = null;
+    let lastFiles = null;  // Save the last loaded files
 
     dropzone.addEventListener('dragover', e => {
       e.preventDefault();
@@ -75,6 +81,10 @@
     });
 
     skipHeader.addEventListener('change', () => {
+      if (lastFiles) handleFiles(lastFiles);  // Re-merge when toggled
+    });
+
+    sortByFirstCol.addEventListener('change', () => {
       if (lastFiles) handleFiles(lastFiles);
     });
 
@@ -89,6 +99,7 @@
       }
 
       const skipFirst = skipHeader.checked;
+      const sortNeeded = sortByFirstCol.checked;
 
       let promises = validFiles.map((file, index) => {
         const ext = file.name.split('.').pop().toLowerCase();
@@ -126,8 +137,20 @@
       });
 
       Promise.all(promises).then(results => {
-        mergedCSV = results.join('\n');
-        output.textContent = (mergedCSV.slice(0, 3000) + (mergedCSV.length > 3000 ? "\n... (truncated)" : ""));
+        let allLines = results.join('\n').split('\n');
+        let header = allLines[0];
+        let dataRows = allLines.slice(1);
+
+        if (sortNeeded) {
+          dataRows.sort((a, b) => {
+            const aVal = a.split('\t')[0];
+            const bVal = b.split('\t')[0];
+            return aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' });
+          });
+        }
+
+        mergedCSV = [header, ...dataRows].join('\n');
+        output.textContent = mergedCSV.slice(0, 3000) + (mergedCSV.length > 3000 ? "\n... (truncated)" : "");
         copyBtn.disabled = false;
       }).catch(err => {
         alert("Error while loading files: " + err);
