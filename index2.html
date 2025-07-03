@@ -5,33 +5,95 @@
   <title>Merge and Copy CSV / XLTM Files</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f2f5f9;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      color: #4a90e2;
+      margin-bottom: 10px;
+    }
     #dropzone {
-      border: 2px dashed #888;
-      padding: 30px;
+      border: 3px dashed #4a90e2;
+      border-radius: 8px;
+      background: #fff;
+      width: 90%;
+      max-width: 600px;
+      padding: 40px;
       text-align: center;
-      color: #555;
-      margin-bottom: 20px;
+      color: #4a90e2;
+      font-size: 1.2em;
+      transition: background 0.3s, border 0.3s;
+      cursor: pointer;
     }
-    #copyBtn {
-      padding: 10px 20px;
-      font-size: 1em;
-    }
-    pre {
-      max-height: 200px;
-      overflow: auto;
-      background: #f8f8f8;
-      padding: 10px;
+    #dropzone:hover {
+      background: #eaf3fc;
+      border-color: #357abd;
     }
     label {
-      display: inline-block;
-      margin: 5px 0;
+      display: block;
+      margin: 15px 0 5px;
+      font-size: 1em;
+    }
+    input[type="file"] {
+      margin-top: 10px;
+    }
+    #copyBtn {
+      background: #4a90e2;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 12px 24px;
+      font-size: 1em;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: background 0.3s;
+    }
+    #copyBtn:disabled {
+      background: #a8c6eb;
+      cursor: not-allowed;
+    }
+    #copyBtn:hover:enabled {
+      background: #357abd;
+    }
+    #fileList {
+      margin: 15px 0;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      width: 90%;
+      max-width: 600px;
+      font-size: 0.95em;
+      color: #555;
+    }
+    pre {
+      max-height: 250px;
+      overflow: auto;
+      background: #fff;
+      padding: 15px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      width: 90%;
+      max-width: 600px;
+    }
+    @media (max-width: 600px) {
+      #dropzone, pre, #fileList {
+        font-size: 1em;
+      }
     }
   </style>
 </head>
 <body>
   <h1>Merge and Copy CSV / XLTM Files</h1>
-  <div id="dropzone">Drop CSV or XLTM files here one by one or all at once</div>
+  <div id="dropzone">Drop CSV or XLTM files here, or click to select</div>
+  <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.xltm" multiple style="display:none;">
   <label>
     <input type="checkbox" id="skipHeader">
     Skip the first row (header) from the second file onward
@@ -40,11 +102,8 @@
     <input type="checkbox" id="sortByFirstCol">
     Sort by the first column in ascending order (excluding header)
   </label>
-  <br><br>
-  <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.xltm" multiple>
-  <br><br>
+  <div id="fileList">📂 Added files: None yet</div>
   <button id="copyBtn" disabled>📋 Copy All</button>
-
   <h3>Merged Content (Preview)</h3>
   <pre id="output">Please load your files...</pre>
 
@@ -55,23 +114,26 @@
     const copyBtn = document.getElementById('copyBtn');
     const skipHeader = document.getElementById('skipHeader');
     const sortByFirstCol = document.getElementById('sortByFirstCol');
+    const fileList = document.getElementById('fileList');
 
-    let allFiles = [];         // All added File objects
-    let fileNamesSet = new Set(); // Track unique file names
+    let allFiles = [];
+    let fileNamesSet = new Set();
     let mergedTSV = "";
+
+    dropzone.addEventListener('click', () => fileInput.click());
 
     dropzone.addEventListener('dragover', e => {
       e.preventDefault();
-      dropzone.style.background = '#eef';
+      dropzone.style.background = '#eaf3fc';
     });
 
     dropzone.addEventListener('dragleave', () => {
-      dropzone.style.background = '';
+      dropzone.style.background = '#fff';
     });
 
     dropzone.addEventListener('drop', e => {
       e.preventDefault();
-      dropzone.style.background = '';
+      dropzone.style.background = '#fff';
       addFiles(e.dataTransfer.files);
     });
 
@@ -79,13 +141,8 @@
       addFiles(fileInput.files);
     });
 
-    skipHeader.addEventListener('change', () => {
-      remergeAll();
-    });
-
-    sortByFirstCol.addEventListener('change', () => {
-      remergeAll();
-    });
+    skipHeader.addEventListener('change', () => remergeAll());
+    sortByFirstCol.addEventListener('change', () => remergeAll());
 
     function addFiles(newFiles) {
       const validFiles = Array.from(newFiles).filter(f =>
@@ -101,8 +158,19 @@
       }
 
       allFiles.push(...uniqueNewFiles);
+      updateFileList();
       //alert(`${uniqueNewFiles.length} new file(s) added.`);
       remergeAll();
+    }
+
+    function updateFileList() {
+      if (allFiles.length === 0) {
+        fileList.textContent = '📂 Added files: None yet';
+      } else {
+        fileList.innerHTML = '📂 Added files:<ul>' +
+          allFiles.map(f => `<li>${f.name}</li>`).join('') +
+          '</ul>';
+      }
     }
 
     function remergeAll() {
@@ -163,7 +231,7 @@
         output.textContent = mergedTSV.slice(0, 3000) + (mergedTSV.length > 3000 ? "\n... (truncated)" : "");
         copyBtn.disabled = false;
       }).catch(err => {
-        alert("Error while loading files: " + err);
+        alert("An error occurred while loading files: " + err);
       });
     }
 
