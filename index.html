@@ -5,33 +5,95 @@
   <title>CSV / XLTM ファイル結合コピー</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f2f5f9;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      color: #4a90e2;
+      margin-bottom: 10px;
+    }
     #dropzone {
-      border: 2px dashed #888;
-      padding: 30px;
+      border: 3px dashed #4a90e2;
+      border-radius: 8px;
+      background: #fff;
+      width: 90%;
+      max-width: 600px;
+      padding: 40px;
       text-align: center;
-      color: #555;
-      margin-bottom: 20px;
+      color: #4a90e2;
+      font-size: 1.2em;
+      transition: background 0.3s, border 0.3s;
+      cursor: pointer;
     }
-    #copyBtn {
-      padding: 10px 20px;
-      font-size: 1em;
-    }
-    pre {
-      max-height: 200px;
-      overflow: auto;
-      background: #f8f8f8;
-      padding: 10px;
+    #dropzone:hover {
+      background: #eaf3fc;
+      border-color: #357abd;
     }
     label {
-      display: inline-block;
-      margin: 5px 0;
+      display: block;
+      margin: 15px 0 5px;
+      font-size: 1em;
+    }
+    input[type="file"] {
+      margin-top: 10px;
+    }
+    #copyBtn {
+      background: #4a90e2;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 12px 24px;
+      font-size: 1em;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: background 0.3s;
+    }
+    #copyBtn:disabled {
+      background: #a8c6eb;
+      cursor: not-allowed;
+    }
+    #copyBtn:hover:enabled {
+      background: #357abd;
+    }
+    #fileList {
+      margin: 15px 0;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      width: 90%;
+      max-width: 600px;
+      font-size: 0.95em;
+      color: #555;
+    }
+    pre {
+      max-height: 250px;
+      overflow: auto;
+      background: #fff;
+      padding: 15px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      width: 90%;
+      max-width: 600px;
+    }
+    @media (max-width: 600px) {
+      #dropzone, pre, #fileList {
+        font-size: 1em;
+      }
     }
   </style>
 </head>
 <body>
   <h1>CSV / XLTMファイルを結合してコピー</h1>
-  <div id="dropzone">CSVやXLTMファイルを1つずつ、またはまとめてドロップしてください</div>
+  <div id="dropzone">ここにCSVやXLTMファイルをドロップ、またはクリックして選択</div>
+  <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.xltm" multiple style="display:none;">
   <label>
     <input type="checkbox" id="skipHeader">
     2個目以降のファイルの1行目（ヘッダー）を除く
@@ -40,11 +102,8 @@
     <input type="checkbox" id="sortByFirstCol">
     1列目の若い順にソートする（1行目除く）
   </label>
-  <br><br>
-  <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.xltm" multiple>
-  <br><br>
+  <div id="fileList">📂 追加済みファイル：まだありません</div>
   <button id="copyBtn" disabled>📋 すべてコピーする</button>
-
   <h3>結合内容（プレビュー）</h3>
   <pre id="output">ファイルを読み込んでください…</pre>
 
@@ -55,23 +114,26 @@
     const copyBtn = document.getElementById('copyBtn');
     const skipHeader = document.getElementById('skipHeader');
     const sortByFirstCol = document.getElementById('sortByFirstCol');
+    const fileList = document.getElementById('fileList');
 
-    let allFiles = [];           // 追加された全ファイル
-    let fileNamesSet = new Set(); // ファイル名を記憶
+    let allFiles = [];
+    let fileNamesSet = new Set();
     let mergedTSV = "";
+
+    dropzone.addEventListener('click', () => fileInput.click());
 
     dropzone.addEventListener('dragover', e => {
       e.preventDefault();
-      dropzone.style.background = '#eef';
+      dropzone.style.background = '#eaf3fc';
     });
 
     dropzone.addEventListener('dragleave', () => {
-      dropzone.style.background = '';
+      dropzone.style.background = '#fff';
     });
 
     dropzone.addEventListener('drop', e => {
       e.preventDefault();
-      dropzone.style.background = '';
+      dropzone.style.background = '#fff';
       addFiles(e.dataTransfer.files);
     });
 
@@ -79,13 +141,8 @@
       addFiles(fileInput.files);
     });
 
-    skipHeader.addEventListener('change', () => {
-      remergeAll();
-    });
-
-    sortByFirstCol.addEventListener('change', () => {
-      remergeAll();
-    });
+    skipHeader.addEventListener('change', () => remergeAll());
+    sortByFirstCol.addEventListener('change', () => remergeAll());
 
     function addFiles(newFiles) {
       const validFiles = Array.from(newFiles).filter(f =>
@@ -96,13 +153,24 @@
       uniqueNewFiles.forEach(f => fileNamesSet.add(f.name));
 
       if (uniqueNewFiles.length === 0) {
-        alert('新しいファイルはありません（重複ファイルは無視されました）。');
+        alert('新しいファイルはありません（重複は無視されました）。');
         return;
       }
 
       allFiles.push(...uniqueNewFiles);
+      updateFileList();
       //alert(`${uniqueNewFiles.length}個の新しいファイルを追加しました。`);
       remergeAll();
+    }
+
+    function updateFileList() {
+      if (allFiles.length === 0) {
+        fileList.textContent = '📂 追加済みファイル：まだありません';
+      } else {
+        fileList.innerHTML = '📂 追加済みファイル：<ul>' +
+          allFiles.map(f => `<li>${f.name}</li>`).join('') +
+          '</ul>';
+      }
     }
 
     function remergeAll() {
