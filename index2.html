@@ -237,7 +237,7 @@
 
     copyBtn.addEventListener('click', () => {
       navigator.clipboard.writeText(mergedTSV)
-        .then(() => alert("Copied to clipboard!"))
+        .then(() => alert("Copied to clipboard! Open a new Excel file and paste it into cell A1."))
         .catch(err => alert("Failed to copy: " + err));
     });
   </script>
